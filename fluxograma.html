@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Estratégia Ypê - Mapa Interativo</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    
+    <!-- Babel para JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        /* Estilos customizados para scrollbar e animações */
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn { animation: fadeIn 0.3s ease-out forwards; }
+        
+        body { margin: 0; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useRef, useEffect, useCallback } = React;
+
+        // --- ÍCONES (SVG Components para não depender de libs externas) ---
+        const Icon = ({ path, className, style }) => (
+            <svg 
+                xmlns="http://www.w3.org/2000/svg" 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="currentColor" 
+                strokeWidth="2" 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                className={className}
+                style={style}
+            >
+                {path}
+            </svg>
+        );
+
+        const Icons = {
+            Plus: (props) => <Icon {...props} path={<><path d="M5 12h14"/><path d="M12 5v14"/></>} />,
+            Trash2: (props) => <Icon {...props} path={<><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></>} />,
+            Layout: (props) => <Icon {...props} path={<><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></>} />,
+            Type: (props) => <Icon {...props} path={<><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" x2="15" y1="20" y2="20"/><line x1="12" x2="12" y1="4" y2="20"/></>} />,
+            ZoomIn: (props) => <Icon {...props} path={<><circle cx="11" cy="11" r="8"/><line x1="21" x2="16.65" y1="21" y2="16.65"/><line x1="11" x2="11" y1="8" y2="14"/><line x1="8" x2="14" y1="11" y2="11"/></>} />,
+            ZoomOut: (props) => <Icon {...props} path={<><circle cx="11" cy="11" r="8"/><line x1="21" x2="16.65" y1="21" y2="16.65"/><line x1="8" x2="14" y1="11" y2="11"/></>} />,
+            Maximize: (props) => <Icon {...props} path={<><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></>} />,
+            Target: (props) => <Icon {...props} path={<><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></>} />,
+            Layers: (props) => <Icon {...props} path={<><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></>} />,
+            Play: (props) => <Icon {...props} path={<polygon points="5 3 19 12 5 21 5 3"/>} />,
+            BarChart3: (props) => <Icon {...props} path={<><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></>} />,
+            MousePointer2: (props) => <Icon {...props} path={<path d="m12 6 2-2-2-2-2 2 2 2zm0 12-2 2 2 2 2-2-2-2zm-6-6-2-2-2 2 2 2 2-2zm12 0 2-2 2 2-2 2 2-2z"/>} />, 
+            AlignLeft: (props) => <Icon {...props} path={<><line x1="21" x2="3" y1="6" y2="6"/><line x1="15" x2="3" y1="12" y2="12"/><line x1="17" x2="3" y1="18" y2="18"/></>} />,
+            Link: (props) => <Icon {...props} path={<><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></>} />,
+            Save: (props) => <Icon {...props} path={<><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></>} />,
+            RotateCcw: (props) => <Icon {...props} path={<><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></>} />
+        };
+
+        // --- CONFIGURAÇÃO DE TEMAS ---
+        const THEMES = {
+            blue: { main: '#2563eb', light: '#eff6ff', border: '#bfdbfe', label: 'Liderar' },
+            pink: { main: '#db2777', light: '#fdf2f8', border: '#fbcfe8', label: 'Cuidar' },
+            purple: { main: '#9333ea', light: '#faf5ff', border: '#e9d5ff', label: 'Inovar' },
+            yellow: { main: '#ca8a04', light: '#fefce8', border: '#fef08a', label: 'Se Mostrar' },
+            green: { main: '#16a34a', light: '#f0fdf4', border: '#bbf7d0', label: 'Crescer' },
+            slate: { main: '#475569', light: '#f8fafc', border: '#e2e8f0', label: 'Produzir' },
+            orange: { main: '#ea580c', light: '#fff7ed', border: '#fed7aa', label: 'Aprender & Outros' },
+        };
+
+        // --- DADOS COMPLETOS E DETALHADOS ---
+        const INITIAL_NODES_DATA = [
+            // =========================================================================
+            // 1. DIMENSÃO: LIDERAR (Azul) - JÁ SALVO
+            // =========================================================================
+            { id: '1', type: 'dimension', label: 'LIDERAR', x: 0, y: 300, color: 'blue' },
+            { id: '1-1', type: 'attribute', label: 'Pessoas', x: 300, y: 0, color: 'blue' },
+            { id: '1-1-1', type: 'action', label: 'Atuação alinhada aos valores', description: 'Avaliação de performance com foco em comportamentos', x: 600, y: -100, color: 'blue' },
+            { id: '1-1-1-k', type: 'kpi', label: 'Índice de Liderança', x: 900, y: -100, color: 'blue' },
+            { id: '1-1-2', type: 'action', label: 'Desenvolvimento de pessoas', description: 'Avaliação do time, alcance de resultados, Feedbacks dados', x: 600, y: 0, color: 'blue' },
+            { id: '1-1-2-k', type: 'kpi', label: 'Índice de Liderança', x: 900, y: 0, color: 'blue' },
+            { id: '1-1-3', type: 'action', label: 'Pessoas certas nos lugares certos', description: 'Calibração de Performance, Rituais Ciclo de gente', x: 600, y: 100, color: 'blue' },
+            { id: '1-1-4', type: 'action', label: 'Liderança Ypê', description: 'Academia de Liderança / Coaching em grupo', x: 600, y: 200, color: 'blue' },
+            { id: '1-2', type: 'attribute', label: 'Mercado', x: 300, y: 550, color: 'blue' },
+            { id: '1-2-1', type: 'action', label: 'Construção de marca', description: 'Construção de marca de sabonetes, distribuição de produto e execução PDV', x: 600, y: 350, color: 'blue' },
+            { id: '1-2-1-k', type: 'kpi', label: 'Volume Sellout, Receita Líq, EBITDA', x: 900, y: 350, color: 'blue' },
+            { id: '1-2-2', type: 'action', label: 'Revisão processo qualidade', description: 'Inauguração lab microbiologia, investir área fabril, reciclar e treinar', x: 600, y: 450, color: 'blue' },
+            { id: '1-2-2-k', type: 'kpi', label: 'Indicadores de Qualidade', x: 900, y: 450, color: 'blue' },
+            { id: '1-2-3', type: 'action', label: 'Investimento em novos CDs', description: '', x: 600, y: 550, color: 'blue' },
+            { id: '1-2-4', type: 'action', label: 'Melhorar atendimento aos clientes', description: '', x: 600, y: 630, color: 'blue' },
+            { id: '1-2-5', type: 'action', label: 'Melhorar categorias', description: 'Melhora da gestão de incentivos da equipe', x: 600, y: 710, color: 'blue' },
+            { id: '1-2-5-k', type: 'kpi', label: 'Crescimento de vendas das categorias', x: 900, y: 710, color: 'blue' },
+            { id: '1-2-6', type: 'action', label: 'Programa Excelência Comercial', description: '', x: 600, y: 810, color: 'blue' },
+
+
+            // =========================================================================
+            // 2. DIMENSÃO: CUIDAR (Rosa) - JÁ SALVO
+            // =========================================================================
+            { id: '2', type: 'dimension', label: 'CUIDAR', x: 0, y: 1400, color: 'pink' },
+            { id: '2-1', type: 'attribute', label: 'Clientes (consumidor patrão)', x: 300, y: 1100, color: 'pink' },
+            { id: '2-1-1', type: 'action', label: 'Qualidade dos produtos', description: 'Qualidade de ponta a ponta e fazer certo da primeira vez.\nDiagnóstico de Maturidade da Qualidade.\nFluxo de Revisão de Projetos (VMO).\nProjeto de IA SAC/CRM.\nSEY', x: 600, y: 1000, color: 'pink' },
+            { id: '2-1-1-k', type: 'kpi', label: 'SAC, CRM, IQF, PTP, BPF, ATD, Custo de não qualidade', x: 900, y: 1000, color: 'pink' },
+            { id: '2-1-2', type: 'action', label: 'Proximidade com o cliente', description: 'Programa/Iniciativa Rota', x: 600, y: 1150, color: 'pink' },
+            { id: '2-1-3', type: 'action', label: 'Satisfação do cliente', description: 'Olhando preço, qualidade e inovação', x: 600, y: 1250, color: 'pink' },
+            { id: '2-2', type: 'attribute', label: 'Colaboradores', x: 300, y: 1700, color: 'pink' },
+            { id: '2-2-1', type: 'action', label: 'Segurança', description: 'Programa Cuidar (Social, Psicólogo, Médico da Família, Financeiro).\nCenso Saúde Mental.', x: 600, y: 1400, color: 'pink' },
+            { id: '2-2-2', type: 'action', label: 'Engajamento dos colaboradores', description: 'Pesquisas de engajamento (Pulse, GPTW).\nOlimpíadas Ypê.\nNatal.\nDia da Familia.\nCesta de produtos para família.', x: 600, y: 1550, color: 'pink' },
+            { id: '2-2-3', type: 'action', label: 'Reconhecimento', description: '(Programa Cultivar) Atitude, Gratidão, Projetos Destaque e Ydealize.\nMérito de acordo com avaliação de performance.\nPromoção e Comitê de Carreira para coordenadores.', x: 600, y: 1750, color: 'pink' },
+            { id: '2-2-4', type: 'action', label: 'Diversidade e Inclusão', description: 'Foco em Mulheres na Liderança.\nAtração PCD.', x: 600, y: 1950, color: 'pink' },
+            { id: '2-2-5', type: 'action', label: 'Jornada do colaborador', description: 'Ciclo de Gente.\nRevitaliza RH (Folha, Ciclo, Educação).\nOnboarding KIT IT.\nOnboarding Kit Boas vindas.', x: 600, y: 2100, color: 'pink' },
+            { id: '2-3', type: 'attribute', label: 'Equipamentos', x: 300, y: 2300, color: 'pink' },
+            { id: '2-3-1', type: 'action', label: 'TPM', description: 'Programa de Conservação Autônoma TPM', x: 600, y: 2300, color: 'pink' },
+
+
+            // =========================================================================
+            // 3. DIMENSÃO: INOVAR (Roxo) - JÁ SALVO
+            // =========================================================================
+            { id: '3', type: 'dimension', label: 'INOVAR', x: 0, y: 2800, color: 'purple' },
+            { id: '3-1', type: 'attribute', label: 'Melhoria contínua', x: 300, y: 2700, color: 'purple' },
+            { id: '3-1-1', type: 'action', label: 'PDCA (Cultivar)', description: 'Dar ideias de melhoria pelo Projeto Ydealize (parte do projeto Cultivar)', x: 600, y: 2500, color: 'purple' },
+            { id: '3-1-2', type: 'action', label: 'PDCA (RH)', description: 'Revitaliza RH - nova plataforma digital para Folha, Ciclo, Educação', x: 600, y: 2600, color: 'purple' },
+            { id: '3-1-3', type: 'action', label: 'Imersão nas Áreas', description: '+ Design Thinking', x: 600, y: 2700, color: 'purple' },
+            { id: '3-1-4', type: 'action', label: 'Anomalias', description: 'Projeto e Registro de Anomalias', x: 600, y: 2800, color: 'purple' },
+            { id: '3-1-5', type: 'action', label: 'Grupos de Melhoria', description: 'Grupos de Melhoria de Resultado', x: 600, y: 2900, color: 'purple' },
+            { id: '3-1-6', type: 'action', label: 'GIGA', description: 'Gestão autônoma', x: 600, y: 3000, color: 'purple' },
+            { id: '3-2', type: 'attribute', label: 'Experimentar o novo', x: 300, y: 3300, color: 'purple' },
+            { id: '3-2-1', type: 'action', label: 'Dia Y', description: '', x: 600, y: 3150, color: 'purple' },
+            { id: '3-2-2', type: 'action', label: 'Ydealize', description: '', x: 600, y: 3230, color: 'purple' },
+            { id: '3-2-3', type: 'action', label: 'UnYpê', description: 'Aprender competências para o futuro', x: 600, y: 3310, color: 'purple' },
+            { id: '3-2-4', type: 'action', label: 'Comitê IA', description: 'Comitê de Inteligência Artificial', x: 600, y: 3390, color: 'purple' },
+            { id: '3-2-5', type: 'action', label: 'Yara', description: 'IA da Ypê', x: 600, y: 3470, color: 'purple' },
+
+
+            // =========================================================================
+            // 4. SE MOSTRAR (Amarelo) - DETALHADO (NOVA ESTRUTURA)
+            // =========================================================================
+            { id: '4', type: 'dimension', label: 'SE MOSTRAR', x: 0, y: 3800, color: 'yellow' },
+
+            // --- ATRIBUTO: ÉTICA ---
+            { id: '4-1', type: 'attribute', label: 'Ética', x: 300, y: 3750, color: 'yellow' },
+            
+            // Ação: Be Compliance
+            { id: '4-1-1', type: 'action', label: 'Be Compliance', description: 'Canal de Ética Ypê.\nComitê de integridade.\nCódigo de Conduta.\nAgentes de Conformidade.', x: 600, y: 3700, color: 'yellow' },
+            
+            // Ação: Compliance e Anti Corrupção
+            { id: '4-1-2', type: 'action', label: 'Compliance e Anti Corrupção', description: 'Selo Pró Etica concedido pela CGU.', x: 600, y: 3800, color: 'yellow' },
+
+            // --- ATRIBUTO: REPUTAÇÃO ---
+            { id: '4-2', type: 'attribute', label: 'Reputação', x: 300, y: 4000, color: 'yellow' },
+            
+            // Ação: Ser e Parecer
+            { id: '4-2-1', type: 'action', label: 'Ser e parecer – equalizar valor', description: 'Garantir percepção alinhada à qualidade.\nEvoluir pricing e posicionamento.\nAtributos e embalagens como alavancas.\nExcelência na qualidade.\nWar game lava roupas.\nProjeto Embaixadores.\nMovimento Transparência 100%.', x: 600, y: 3950, color: 'yellow' },
+            { id: '4-2-1-k', type: 'kpi', label: '% MC, % MCC, Sell-Out, Share Volume (LRP, LRL, Amaciantes), Brand Power, ROL', x: 900, y: 3950, color: 'yellow' },
+            
+            // Ação: Nacionalidade
+            { id: '4-2-2', type: 'action', label: 'Nacionalidade', description: 'Projeto de posicionamento para Marca Corporativa', x: 600, y: 4100, color: 'yellow' },
+
+            // --- ATRIBUTO: SUSTENTABILIDADE ---
+            { id: '4-3', type: 'attribute', label: 'Sustentabilidade', x: 300, y: 4400, color: 'yellow' },
+            
+            // Ação: Apropriar-se de sustentabilidade
+            { id: '4-3-1', type: 'action', label: 'Sustentabilidade no centro', description: 'Plano diretor de sustentabilidade', x: 600, y: 4200, color: 'yellow' },
+            
+            // Ação: Relatório
+            { id: '4-3-2', type: 'action', label: 'Relatório de Sustentabilidade', description: 'Publicação voluntária', x: 600, y: 4280, color: 'yellow' },
+            
+            // Ação: Pacto Global
+            { id: '4-3-3', type: 'action', label: 'UN Pacto global', description: '', x: 600, y: 4360, color: 'yellow' },
+            
+            // Ação: Movimento + água
+            { id: '4-3-4', type: 'action', label: 'Movimento + água', description: '(diversas iniciativas)', x: 600, y: 4440, color: 'yellow' },
+            
+            // Ação: Mente em Foco
+            { id: '4-3-5', type: 'action', label: 'Movimento Mente em Foco', description: 'Programa Cuidar (Social, Psicólogo, Médico, Financeiro)', x: 600, y: 4520, color: 'yellow' },
+            
+            // Ação: Educa2030
+            { id: '4-3-6', type: 'action', label: 'Movimento Educa2030', description: 'Educary, EducaYpê, Unico Skill', x: 600, y: 4600, color: 'yellow' },
+
+            // --- ATRIBUTO: EMPLOYER BRANDING & QUALIDADE ---
+            { id: '4-4', type: 'attribute', label: 'Marca Empregadora & Qualidade', x: 300, y: 4800, color: 'yellow' },
+            { id: '4-4-1', type: 'action', label: 'Employer branding', description: 'Premiação GPTW', x: 600, y: 4750, color: 'yellow' },
+            { id: '4-4-2', type: 'action', label: 'Qualidade', description: 'Nossa melhor propaganda é a qualidade', x: 600, y: 4850, color: 'yellow' },
+
+            // --- ATRIBUTO: INCLUSÃO E DIVERSIDADE ---
+            { id: '4-5', type: 'attribute', label: 'Inclusão e Diversidade', x: 300, y: 5100, color: 'yellow' },
+            { id: '4-5-1', type: 'action', label: 'Inclusão', description: 'Rede Empresarial de Inclusão Social (REIS) / Pacto pela Inclusão', x: 600, y: 5000, color: 'yellow' },
+            { id: '4-5-2', type: 'action', label: 'Mulheres', description: 'Selo Pró-Ética Mulheres / Encontros Mulheres Essenciais / Woman on Board', x: 600, y: 5100, color: 'yellow' },
+            { id: '4-5-3', type: 'action', label: 'PCD', description: 'Programa Aprendizes / Projeto Promotor com Deficiência', x: 600, y: 5200, color: 'yellow' },
+
+
+            // =========================================================================
+            // 5. CRESCER (Verde) - (Deslocado)
+            // =========================================================================
+            { id: '5', type: 'dimension', label: 'CRESCER', x: 0, y: 5600, color: 'green' },
+            { id: '5-1', type: 'attribute', label: 'Expansão', x: 300, y: 5500, color: 'green' },
+            { id: '5-1-a1', type: 'action', label: 'Uma Ypê por Região', x: 600, y: 5500, color: 'green' },
+            { id: '5-2', type: 'attribute', label: 'Consumidor', x: 300, y: 5700, color: 'green' },
+            { id: '5-2-a1', type: 'action', label: 'Omnicanalidade', x: 600, y: 5700, color: 'green' },
+
+            // =========================================================================
+            // 6. PRODUZIR (Slate) - (Deslocado)
+            // =========================================================================
+            { id: '6', type: 'dimension', label: 'PRODUZIR', x: 0, y: 6200, color: 'slate' },
+            { id: '6-1', type: 'attribute', label: 'Produtividade', x: 300, y: 6150, color: 'slate' },
+            { id: '6-1-a1', type: 'action', label: 'Redução Custos', x: 600, y: 6150, color: 'slate' },
+            
+            // =========================================================================
+            // 7. APRENDER (Laranja) - (Deslocado)
+            // =========================================================================
+            { id: '7', type: 'dimension', label: 'APRENDER +', x: 0, y: 6600, color: 'orange' },
+            { id: '7-1', type: 'attribute', label: 'Aprender', x: 300, y: 6600, color: 'orange' },
+            { id: '7-1-a1', type: 'action', label: 'UnYpê', x: 600, y: 6600, color: 'orange' },
+        ];
+
+        const INITIAL_EDGES_DATA = [
+            // LIDERAR - MANTIDO
+            { id: 'e1-11', source: '1', target: '1-1' },
+            { id: 'e11-1', source: '1-1', target: '1-1-1' }, { id: 'e111-k', source: '1-1-1', target: '1-1-1-k' },
+            { id: 'e11-2', source: '1-1', target: '1-1-2' }, { id: 'e112-k', source: '1-1-2', target: '1-1-2-k' },
+            { id: 'e11-3', source: '1-1', target: '1-1-3' },
+            { id: 'e11-4', source: '1-1', target: '1-1-4' },
+            { id: 'e1-12', source: '1', target: '1-2' },
+            { id: 'e12-1', source: '1-2', target: '1-2-1' }, { id: 'e121-k', source: '1-2-1', target: '1-2-1-k' },
+            { id: 'e12-2', source: '1-2', target: '1-2-2' }, { id: 'e122-k', source: '1-2-2', target: '1-2-2-k' },
+            { id: 'e12-3', source: '1-2', target: '1-2-3' },
+            { id: 'e12-4', source: '1-2', target: '1-2-4' },
+            { id: 'e12-5', source: '1-2', target: '1-2-5' }, { id: 'e125-k', source: '1-2-5', target: '1-2-5-k' },
+            { id: 'e12-6', source: '1-2', target: '1-2-6' },
+
+            // CUIDAR - MANTIDO
+            { id: 'e2-21', source: '2', target: '2-1' },
+            { id: 'e21-1', source: '2-1', target: '2-1-1' }, { id: 'e211-k', source: '2-1-1', target: '2-1-1-k' },
+            { id: 'e21-2', source: '2-1', target: '2-1-2' },
+            { id: 'e21-3', source: '2-1', target: '2-1-3' },
+            { id: 'e2-22', source: '2', target: '2-2' },
+            { id: 'e22-1', source: '2-2', target: '2-2-1' },
+            { id: 'e22-2', source: '2-2', target: '2-2-2' },
+            { id: 'e22-3', source: '2-2', target: '2-2-3' },
+            { id: 'e22-4', source: '2-2', target: '2-2-4' },
+            { id: 'e22-5', source: '2-2', target: '2-2-5' },
+            { id: 'e2-23', source: '2', target: '2-3' },
+            { id: 'e23-1', source: '2-3', target: '2-3-1' },
+
+            // INOVAR - MANTIDO
+            { id: 'e3-31', source: '3', target: '3-1' },
+            { id: 'e31-1', source: '3-1', target: '3-1-1' },
+            { id: 'e31-2', source: '3-1', target: '3-1-2' },
+            { id: 'e31-3', source: '3-1', target: '3-1-3' },
+            { id: 'e31-4', source: '3-1', target: '3-1-4' },
+            { id: 'e31-5', source: '3-1', target: '3-1-5' },
+            { id: 'e31-6', source: '3-1', target: '3-1-6' },
+            { id: 'e3-32', source: '3', target: '3-2' },
+            { id: 'e32-1', source: '3-2', target: '3-2-1' },
+            { id: 'e32-2', source: '3-2', target: '3-2-2' },
+            { id: 'e32-3', source: '3-2', target: '3-2-3' },
+            { id: 'e32-4', source: '3-2', target: '3-2-4' },
+            { id: 'e32-5', source: '3-2', target: '3-2-5' },
+
+            // SE MOSTRAR - NOVO
+            { id: 'e4-41', source: '4', target: '4-1' },
+            { id: 'e41-1', source: '4-1', target: '4-1-1' },
+            { id: 'e41-2', source: '4-1', target: '4-1-2' },
+
+            { id: 'e4-42', source: '4', target: '4-2' },
+            { id: 'e42-1', source: '4-2', target: '4-2-1' }, { id: 'e421-k', source: '4-2-1', target: '4-2-1-k' },
+            { id: 'e42-2', source: '4-2', target: '4-2-2' },
+
+            { id: 'e4-43', source: '4', target: '4-3' },
+            { id: 'e43-1', source: '4-3', target: '4-3-1' },
+            { id: 'e43-2', source: '4-3', target: '4-3-2' },
+            { id: 'e43-3', source: '4-3', target: '4-3-3' },
+            { id: 'e43-4', source: '4-3', target: '4-3-4' },
+            { id: 'e43-5', source: '4-3', target: '4-3-5' },
+            { id: 'e43-6', source: '4-3', target: '4-3-6' },
+
+            { id: 'e4-44', source: '4', target: '4-4' },
+            { id: 'e44-1', source: '4-4', target: '4-4-1' },
+            { id: 'e44-2', source: '4-4', target: '4-4-2' },
+
+            { id: 'e4-45', source: '4', target: '4-5' },
+            { id: 'e45-1', source: '4-5', target: '4-5-1' },
+            { id: 'e45-2', source: '4-5', target: '4-5-2' },
+            { id: 'e45-3', source: '4-5', target: '4-5-3' },
+
+            // OUTROS (Deslocados)
+            { id: 'e5-51', source: '5', target: '5-1' }, { id: 'e51-1', source: '5-1', target: '5-1-a1' },
+            { id: 'e5-52', source: '5', target: '5-2' }, { id: 'e52-1', source: '5-2', target: '5-2-a1' },
+            { id: 'e6-61', source: '6', target: '6-1' }, { id: 'e61-1', source: '6-1', target: '6-1-a1' },
+            { id: 'e7-71', source: '7', target: '7-1' }, { id: 'e71-1', source: '7-1', target: '7-1-a1' },
+        ];
+
+        function App() {
+            // Inicialização do Estado com LocalStorage
+            const [nodes, setNodes] = useState(() => {
+                const saved = localStorage.getItem('ypeNodes');
+                return saved ? JSON.parse(saved) : INITIAL_NODES_DATA;
+            });
+
+            const [edges, setEdges] = useState(() => {
+                const saved = localStorage.getItem('ypeEdges');
+                return saved ? JSON.parse(saved) : INITIAL_EDGES_DATA;
+            });
+
+            const [selectedNodeId, setSelectedNodeId] = useState(null);
+            
+            // Viewport
+            const [scale, setScale] = useState(0.5); 
+            const [pan, setPan] = useState({ x: 50, y: 50 });
+            
+            // Interação
+            const [isDraggingNode, setIsDraggingNode] = useState(null);
+            const [isPanning, setIsPanning] = useState(false);
+            const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
+
+            const containerRef = useRef(null);
+
+            // --- PERSISTÊNCIA AUTOMÁTICA ---
+            useEffect(() => {
+                localStorage.setItem('ypeNodes', JSON.stringify(nodes));
+            }, [nodes]);
+
+            useEffect(() => {
+                localStorage.setItem('ypeEdges', JSON.stringify(edges));
+            }, [edges]);
+
+            // Função para Resetar Dados
+            const handleResetData = () => {
+                if (confirm('Tem certeza? Isso apagará todas as suas edições e restaurará o mapa original da Ypê.')) {
+                    setNodes(INITIAL_NODES_DATA);
+                    setEdges(INITIAL_EDGES_DATA);
+                    localStorage.removeItem('ypeNodes');
+                    localStorage.removeItem('ypeEdges');
+                }
+            };
+
+            // --- Handlers de Mouse ---
+            const handleMouseDown = (e) => {
+                if (e.target.closest('button') || e.target.closest('input') || e.target.closest('textarea') || e.target.closest('select')) return;
+
+                const nodeElement = e.target.closest('[data-nodeid]');
+
+                if (nodeElement) {
+                    const nodeId = nodeElement.dataset.nodeid;
+                    setIsDraggingNode(nodeId);
+                    setLastMousePos({ x: e.clientX, y: e.clientY });
+                    setSelectedNodeId(nodeId);
+                    e.stopPropagation();
+                } else {
+                    setIsPanning(true);
+                    setLastMousePos({ x: e.clientX, y: e.clientY });
+                    setSelectedNodeId(null);
+                }
+            };
+
+            const handleMouseMove = useCallback((e) => {
+                const deltaX = e.clientX - lastMousePos.x;
+                const deltaY = e.clientY - lastMousePos.y;
+
+                if (isDraggingNode) {
+                    setNodes((prev) => prev.map(node => {
+                        if (node.id === isDraggingNode) {
+                            return {
+                                ...node,
+                                x: node.x + deltaX / scale,
+                                y: node.y + deltaY / scale
+                            };
+                        }
+                        return node;
+                    }));
+                    setLastMousePos({ x: e.clientX, y: e.clientY });
+                } else if (isPanning) {
+                    setPan((prev) => ({
+                        x: prev.x + deltaX,
+                        y: prev.y + deltaY
+                    }));
+                    setLastMousePos({ x: e.clientX, y: e.clientY });
+                }
+            }, [isDraggingNode, isPanning, lastMousePos, scale]);
+
+            const handleMouseUp = () => {
+                setIsDraggingNode(null);
+                setIsPanning(false);
+            };
+
+            // --- CRUD e LÓGICA DE VÍNCULOS ---
+            
+            const handleUpdateNode = (id, field, value) => {
+                setNodes(nodes.map(n => n.id === id ? { ...n, [field]: value } : n));
+            };
+
+            const getParentId = (childId) => {
+                const edge = edges.find(e => e.target === childId);
+                return edge ? edge.source : '';
+            };
+
+            const handleRelinkNode = (childId, newParentId) => {
+                if (!newParentId) return;
+
+                const newParentNode = nodes.find(n => n.id === newParentId);
+                const childNode = nodes.find(n => n.id === childId);
+
+                const newEdges = edges.filter(e => e.target !== childId);
+                newEdges.push({ id: `e${newParentId}-${childId}-${Date.now()}`, source: newParentId, target: childId });
+                setEdges(newEdges);
+
+                if (newParentNode && childNode) {
+                    setNodes(nodes.map(n => n.id === childId ? {
+                        ...n,
+                        x: newParentNode.x + 250,
+                        y: newParentNode.y + 20,
+                        color: newParentNode.color
+                    } : n));
+                }
+            };
+
+            const handleAddNode = (type) => {
+                const parentId = selectedNodeId;
+                const parentNode = nodes.find(n => n.id === parentId);
+                
+                const newNodeId = Date.now().toString();
+                
+                let startX = parentNode ? parentNode.x + 280 : (-pan.x + 100 + Math.random() * 50) / scale;
+                let startY = parentNode ? parentNode.y : (-pan.y + 100 + Math.random() * 50) / scale;
+
+                if (type === 'dimension' && !parentNode) {
+                   const maxY = nodes.reduce((max, n) => Math.max(max, n.y), 0);
+                   startY = maxY + 400;
+                   startX = 0;
+                }
+
+                const newNode = {
+                    id: newNodeId,
+                    type: type,
+                    label: type === 'dimension' ? 'Nova Dimensão' : type === 'attribute' ? 'Atributo' : type === 'action' ? 'Nova Ação' : 'Novo KPI',
+                    description: '',
+                    x: startX,
+                    y: startY,
+                    color: parentNode ? parentNode.color : 'blue'
+                };
+
+                setNodes([...nodes, newNode]);
+
+                if (parentId) {
+                    setEdges([...edges, { id: `e${parentId}-${newNodeId}`, source: parentId, target: newNodeId }]);
+                }
+                setSelectedNodeId(newNodeId);
+            };
+
+            const handleDeleteNode = () => {
+                if (!selectedNodeId) return;
+                setNodes(nodes.filter(n => n.id !== selectedNodeId));
+                setEdges(edges.filter(e => e.source !== selectedNodeId && e.target !== selectedNodeId));
+                setSelectedNodeId(null);
+            };
+
+            // --- Renderização Visual ---
+            const getPath = (start, end) => {
+                let startOffset = 220;
+                if (start.type === 'dimension') startOffset = 150;
+                if (start.type === 'attribute') startOffset = 180;
+                if (start.type === 'action') startOffset = 230;
+                if (start.type === 'kpi') startOffset = 180;
+
+                const sx = start.x + startOffset; 
+                const sy = start.y + 40; 
+                const ex = end.x;
+                const ey = end.y + 40;
+                const control = Math.abs(ex - sx) * 0.4;
+
+                return `M ${sx} ${sy} C ${sx + control} ${sy}, ${ex - control} ${ey}, ${ex} ${ey}`;
+            };
+
+            const selectedNode = nodes.find(n => n.id === selectedNodeId);
+            
+            const availableParents = nodes.filter(n => 
+                n.id !== selectedNodeId && 
+                n.type !== 'kpi' 
+            );
+
+            const renderNode = (node) => {
+                const theme = THEMES[node.color] || THEMES.blue;
+                const isSelected = selectedNodeId === node.id;
+                const commonClasses = `absolute cursor-grab active:cursor-grabbing shadow-sm transition-all hover:shadow-md select-none group flex flex-col justify-center
+                    ${isSelected ? 'ring-2 ring-offset-2 ring-slate-400 z-30' : 'z-10'}
+                `;
+
+                if (node.type === 'dimension') {
+                    return (
+                        <div
+                            key={node.id}
+                            data-nodeid={node.id}
+                            className={`${commonClasses} w-[180px] h-[180px] rounded-full text-white items-center text-center p-4`}
+                            style={{ left: node.x, top: node.y, backgroundColor: theme.main }}
+                        >
+                            <Icons.Target className="w-8 h-8 mb-2 opacity-90" />
+                            <span className="font-bold text-xl leading-tight tracking-wider uppercase">{node.label}</span>
+                        </div>
+                    );
+                }
+                if (node.type === 'attribute') {
+                    return (
+                        <div
+                            key={node.id}
+                            data-nodeid={node.id}
+                            className={`${commonClasses} w-[200px] min-h-[80px] bg-white rounded-2xl border-l-[8px] pl-4 pr-3 py-3`}
+                            style={{ left: node.x, top: node.y, borderColor: theme.main }}
+                        >
+                            <div className="flex items-center gap-2 mb-1 opacity-60">
+                                <Icons.Layers className="w-3 h-3" style={{ color: theme.main }} />
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Atributo</span>
+                            </div>
+                            <span className="font-bold text-lg text-slate-800 leading-snug">{node.label}</span>
+                        </div>
+                    );
+                }
+                if (node.type === 'action') {
+                    return (
+                        <div
+                            key={node.id}
+                            data-nodeid={node.id}
+                            className={`${commonClasses} w-[240px] min-h-[90px] bg-white rounded-lg border border-slate-200 overflow-hidden`}
+                            style={{ left: node.x, top: node.y }}
+                        >
+                            <div className="bg-slate-50 px-3 py-2 border-b border-slate-100 flex items-center gap-2">
+                                <Icons.Play className="w-3 h-3" style={{ fill: theme.main, color: theme.main }} />
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 truncate">{node.label}</span>
+                            </div>
+                            <div className="p-3">
+                                <span className="font-medium text-xs text-slate-700 leading-relaxed block whitespace-pre-wrap">
+                                    {node.description || "..."}
+                                </span>
+                            </div>
+                        </div>
+                    );
+                }
+                if (node.type === 'kpi') {
+                    return (
+                        <div
+                            key={node.id}
+                            data-nodeid={node.id}
+                            className={`${commonClasses} w-[200px] min-h-[60px] bg-white rounded-lg border-2 border-dashed pl-3 pr-2 py-2`}
+                            style={{ left: node.x, top: node.y, borderColor: theme.main, backgroundColor: theme.light }}
+                        >
+                            <div className="flex items-center gap-2 mb-1">
+                                <Icons.BarChart3 className="w-3 h-3" style={{ color: theme.main }} />
+                                <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: theme.main }}>KPI</span>
+                            </div>
+                            <span className="font-bold text-xs text-slate-800 leading-snug">{node.label}</span>
+                        </div>
+                    );
+                }
+            };
+
+            return (
+                <div className="flex h-screen w-full bg-slate-50 overflow-hidden text-slate-800 font-sans">
+                    
+                    {/* --- Sidebar Fixa --- */}
+                    <div className="w-80 bg-white border-r border-slate-200 shadow-xl z-50 flex flex-col shrink-0">
+                        <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+                            <div>
+                                <h1 className="font-bold text-lg text-slate-800 flex items-center gap-2">
+                                    <Icons.Layout className="w-5 h-5 text-blue-600" />
+                                    Estratégia Ypê
+                                </h1>
+                                <p className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1 mt-1">
+                                    <Icons.Save className="w-3 h-3" /> Salvo Automaticamente
+                                </p>
+                            </div>
+                            <button onClick={handleResetData} title="Restaurar Padrão" className="p-2 hover:bg-slate-100 rounded text-slate-400 hover:text-red-500 transition-colors">
+                                <Icons.RotateCcw className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-slate-50/50">
+                            {selectedNode ? (
+                                <div className="space-y-4 animate-fadeIn">
+                                    
+                                    {/* Edição de Conteúdo */}
+                                    <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
+                                        <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Título</label>
+                                        <div className="flex items-center gap-2 pb-1">
+                                            <Icons.Type className="w-4 h-4 text-slate-400" />
+                                            <input 
+                                                type="text"
+                                                value={selectedNode.label} 
+                                                onChange={(e) => handleUpdateNode(selectedNode.id, 'label', e.target.value)}
+                                                className="w-full bg-transparent outline-none text-sm font-semibold text-slate-700 leading-snug"
+                                            />
+                                        </div>
+                                        
+                                        {selectedNode.type === 'action' && (
+                                            <div className="mt-3 pt-3 border-t border-slate-100">
+                                                <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Detalhamento (Métodos)</label>
+                                                <div className="flex gap-2">
+                                                    <Icons.AlignLeft className="w-4 h-4 text-slate-400 mt-1" />
+                                                    <textarea 
+                                                        value={selectedNode.description} 
+                                                        onChange={(e) => handleUpdateNode(selectedNode.id, 'description', e.target.value)}
+                                                        className="w-full bg-transparent outline-none text-xs text-slate-600 resize-none h-24 leading-relaxed"
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Seção de Vínculo/Hierarquia */}
+                                    {selectedNode.type !== 'dimension' && (
+                                        <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
+                                            <label className="block text-[10px] font-bold uppercase text-blue-400 mb-2 flex items-center gap-1">
+                                                <Icons.Link className="w-3 h-3" /> Hierarquia / Vínculo
+                                            </label>
+                                            <div className="relative">
+                                                <select 
+                                                    className="w-full text-xs p-2 border border-blue-200 rounded bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                                                    value={getParentId(selectedNode.id)}
+                                                    onChange={(e) => handleRelinkNode(selectedNode.id, e.target.value)}
+                                                >
+                                                    <option value="">-- Sem vínculo --</option>
+                                                    {availableParents.map(p => (
+                                                        <option key={p.id} value={p.id}>
+                                                            {p.label.substring(0, 30)}{p.label.length > 30 ? '...' : ''} ({p.type})
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <p className="text-[10px] text-blue-400 mt-2 leading-tight">
+                                                Selecione um novo "pai" para mover este item e herdar sua cor.
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {/* Seção de Cores */}
+                                    <div>
+                                        <label className="block text-[10px] font-bold uppercase text-slate-400 mb-2">Cor do Tema</label>
+                                        <div className="grid grid-cols-5 gap-2">
+                                            {Object.keys(THEMES).map(colorKey => (
+                                                <button
+                                                    key={colorKey}
+                                                    onClick={() => handleUpdateNode(selectedNode.id, 'color', colorKey)}
+                                                    className={`w-6 h-6 rounded-full border transition-transform hover:scale-110 flex items-center justify-center ${selectedNode.color === colorKey ? 'ring-2 ring-offset-2 ring-slate-400' : ''}`}
+                                                    style={{ backgroundColor: THEMES[colorKey].main, borderColor: THEMES[colorKey].border }}
+                                                />
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Botões de Ação */}
+                                    <div className="pt-4 border-t border-slate-200">
+                                        <label className="block text-[10px] font-bold uppercase text-slate-400 mb-2">Adicionar Filhos</label>
+                                        <div className="grid grid-cols-1 gap-2">
+                                            <button onClick={() => handleAddNode('attribute')} className="btn-add">
+                                                <Icons.Layers className="w-3 h-3 text-blue-500" /> + Atributo
+                                            </button>
+                                            <button onClick={() => handleAddNode('action')} className="btn-add">
+                                                <Icons.Play className="w-3 h-3 text-emerald-500" /> + Ação/Processo
+                                            </button>
+                                            <button onClick={() => handleAddNode('kpi')} className="btn-add">
+                                                <Icons.BarChart3 className="w-3 h-3 text-purple-500" /> + KPI / Resultado
+                                            </button>
+                                        </div>
+                                        
+                                        <button 
+                                            onClick={handleDeleteNode}
+                                            className="w-full mt-4 flex items-center justify-center gap-2 text-red-600 hover:bg-red-50 p-2 rounded-md transition-colors text-xs font-bold uppercase border border-transparent hover:border-red-100"
+                                        >
+                                            <Icons.Trash2 className="w-3 h-3" /> Excluir
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="h-full flex flex-col items-center justify-center text-slate-400 text-center opacity-60">
+                                    <Icons.MousePointer2 className="w-10 h-10 mb-2 text-slate-300" />
+                                    <p className="text-xs">Selecione um item para editar, vincular ou colorir.</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* --- Canvas --- */}
+                    <div 
+                        ref={containerRef}
+                        className="flex-1 relative overflow-hidden bg-slate-50/50 cursor-grab active:cursor-grabbing"
+                        onMouseDown={handleMouseDown}
+                        onMouseMove={handleMouseMove}
+                        onMouseUp={handleMouseUp}
+                        onMouseLeave={handleMouseUp}
+                    >
+                        {/* Grid e Linhas */}
+                        <div 
+                            className="absolute inset-0 pointer-events-none opacity-[0.05]"
+                            style={{
+                                backgroundImage: `linear-gradient(#000 1px, transparent 1px), linear-gradient(90deg, #000 1px, transparent 1px)`,
+                                backgroundSize: `${20 * scale}px ${20 * scale}px`,
+                                backgroundPosition: `${pan.x}px ${pan.y}px`
+                            }}
+                        />
+
+                        <div 
+                            className="absolute origin-top-left transition-transform duration-75 ease-linear"
+                            style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})` }}
+                        >
+                            <svg className="absolute top-0 left-0 w-[8000px] h-[8000px] pointer-events-none overflow-visible">
+                                {edges.map(edge => {
+                                    const source = nodes.find(n => n.id === edge.source);
+                                    const target = nodes.find(n => n.id === edge.target);
+                                    if (!source || !target) return null;
+                                    const theme = THEMES[source.color] || THEMES.blue;
+                                    return (
+                                        <path
+                                            key={edge.id}
+                                            d={getPath(source, target)}
+                                            stroke={theme.border}
+                                            strokeWidth={source.type === 'dimension' ? 4 : 2} 
+                                            fill="none"
+                                        />
+                                    );
+                                })}
+                            </svg>
+
+                            {nodes.map(renderNode)}
+                        </div>
+
+                        {/* Botão Nova Dimensão */}
+                        <button
+                            onClick={() => { setSelectedNodeId(null); handleAddNode('dimension'); }}
+                            className="absolute top-6 left-1/2 -translate-x-1/2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-full shadow-lg font-bold flex items-center gap-2 transition-transform hover:scale-105 active:scale-95 z-50"
+                        >
+                            <Icons.Plus className="w-5 h-5" /> Nova Dimensão
+                        </button>
+
+                        {/* Controles Zoom */}
+                        <div className="absolute bottom-6 right-6 flex gap-2">
+                            <div className="bg-white p-1 rounded-lg shadow-lg border border-slate-200 flex flex-col gap-1">
+                                <button onClick={() => setScale(s => Math.min(s + 0.1, 2))} className="p-2 hover:bg-slate-50 rounded text-slate-600"><Icons.ZoomIn className="w-5 h-5" /></button>
+                                <button onClick={() => setScale(s => Math.max(s - 0.1, 0.2))} className="p-2 hover:bg-slate-50 rounded text-slate-600"><Icons.ZoomOut className="w-5 h-5" /></button>
+                                <button onClick={() => { setScale(0.5); setPan({x:50, y:50}); }} className="p-2 hover:bg-slate-50 rounded text-slate-600"><Icons.Maximize className="w-5 h-5" /></button>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+    <style>
+        .btn-add {
+            @apply flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-md hover:bg-white hover:shadow-sm text-xs font-medium text-slate-600 transition-all text-left;
+        }
+    </style>
+</body>
+</html>
