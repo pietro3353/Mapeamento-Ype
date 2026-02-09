@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Estratégia Ypê - Mapa Interativo</title>
+    <title>Estratégia Ypê - Mapa Colaborativo</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -16,7 +16,6 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
-        /* Estilos customizados para scrollbar e animações */
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
@@ -28,27 +27,59 @@
         .animate-fadeIn { animation: fadeIn 0.3s ease-out forwards; }
         
         body { margin: 0; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+
+        /* Loader */
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
+    <!-- CONFIGURAÇÃO DO FIREBASE -->
+    <script type="module">
+        // Importa as funções necessárias do CDN do Google
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, doc, onSnapshot, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyAqZK2CndUqHQ2meBxR7TrA5AiScWphS40",
+            authDomain: "planejamento-ype.firebaseapp.com",
+            projectId: "planejamento-ype",
+            storageBucket: "planejamento-ype.firebasestorage.app",
+            messagingSenderId: "759028249794",
+            appId: "1:759028249794:web:386c91ceb5577c00f8b75b"
+        };
+
+        // Inicializa o Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // Expõe o banco de dados e funções para o React (que roda no script babel abaixo)
+        window.firebaseDB = db;
+        window.firebaseDoc = doc;
+        window.firebaseOnSnapshot = onSnapshot;
+        window.firebaseSetDoc = setDoc;
+        window.firebaseGetDoc = getDoc;
+
+        // Dispara evento avisando que o Firebase está pronto
+        window.dispatchEvent(new Event('firebase-ready'));
+    </script>
+
+    <!-- APLICAÇÃO REACT -->
     <script type="text/babel">
         const { useState, useRef, useEffect, useCallback } = React;
 
-        // --- ÍCONES (SVG Components para não depender de libs externas) ---
+        // --- ÍCONES ---
         const Icon = ({ path, className, style }) => (
-            <svg 
-                xmlns="http://www.w3.org/2000/svg" 
-                viewBox="0 0 24 24" 
-                fill="none" 
-                stroke="currentColor" 
-                strokeWidth="2" 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                className={className}
-                style={style}
-            >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
                 {path}
             </svg>
         );
@@ -69,10 +100,12 @@
             AlignLeft: (props) => <Icon {...props} path={<><line x1="21" x2="3" y1="6" y2="6"/><line x1="15" x2="3" y1="12" y2="12"/><line x1="17" x2="3" y1="18" y2="18"/></>} />,
             Link: (props) => <Icon {...props} path={<><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></>} />,
             Save: (props) => <Icon {...props} path={<><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></>} />,
-            RotateCcw: (props) => <Icon {...props} path={<><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></>} />
+            RotateCcw: (props) => <Icon {...props} path={<><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></>} />,
+            Cloud: (props) => <Icon {...props} path={<path d="M17.5 19c0-3.037-2.463-5.5-5.5-5.5S6.5 15.963 6.5 19h11zm-5.5 0V9m0 0l-3 3m3-3l3 3"/>} />,
+            CloudCheck: (props) => <Icon {...props} path={<><path d="M12 10v6m0 0l-3-3m3 3l3-3"/><path d="M4 16.2a10 10 0 0 1 19.4 0"/></>} /> 
         };
 
-        // --- CONFIGURAÇÃO DE TEMAS ---
+        // --- TEMAS ---
         const THEMES = {
             blue: { main: '#2563eb', light: '#eff6ff', border: '#bfdbfe', label: 'Liderar' },
             pink: { main: '#db2777', light: '#fdf2f8', border: '#fbcfe8', label: 'Cuidar' },
@@ -80,14 +113,20 @@
             yellow: { main: '#ca8a04', light: '#fefce8', border: '#fef08a', label: 'Se Mostrar' },
             green: { main: '#16a34a', light: '#f0fdf4', border: '#bbf7d0', label: 'Crescer' },
             slate: { main: '#475569', light: '#f8fafc', border: '#e2e8f0', label: 'Produzir' },
-            orange: { main: '#ea580c', light: '#fff7ed', border: '#fed7aa', label: 'Aprender & Outros' },
+            orange: { main: '#ea580c', light: '#fff7ed', border: '#fed7aa', label: 'Aprender' },
+            teal: { main: '#0d9488', light: '#ccfbf1', border: '#5eead4', label: 'Comunicar' },
+            indigo: { main: '#4f46e5', light: '#e0e7ff', border: '#818cf8', label: 'Desenvolver' },
+            rose: { main: '#e11d48', light: '#ffe4e6', border: '#fda4af', label: 'Digitalizar' },
+            cyan: { main: '#06b6d4', light: '#cffafe', border: '#67e8f9', label: 'Reconhecer' },
+            stone: { main: '#78716c', light: '#f5f5f4', border: '#a8a29e', label: 'Implementar?' },
+            lime: { main: '#65a30d', light: '#ecfccb', border: '#a3e635', label: 'Compartilhar?' },
+            fuchsia: { main: '#c026d3', light: '#fae8ff', border: '#e879f9', label: 'Atrair?' },
         };
 
-        // --- DADOS COMPLETOS E DETALHADOS ---
+        // --- SEED DATA (Usado apenas se o banco estiver vazio) ---
+        // (Aqui mantemos a estrutura completa que construímos)
         const INITIAL_NODES_DATA = [
-            // =========================================================================
-            // 1. DIMENSÃO: LIDERAR (Azul) - JÁ SALVO
-            // =========================================================================
+            // LIDERAR
             { id: '1', type: 'dimension', label: 'LIDERAR', x: 0, y: 300, color: 'blue' },
             { id: '1-1', type: 'attribute', label: 'Pessoas', x: 300, y: 0, color: 'blue' },
             { id: '1-1-1', type: 'action', label: 'Atuação alinhada aos valores', description: 'Avaliação de performance com foco em comportamentos', x: 600, y: -100, color: 'blue' },
@@ -107,10 +146,7 @@
             { id: '1-2-5-k', type: 'kpi', label: 'Crescimento de vendas das categorias', x: 900, y: 710, color: 'blue' },
             { id: '1-2-6', type: 'action', label: 'Programa Excelência Comercial', description: '', x: 600, y: 810, color: 'blue' },
 
-
-            // =========================================================================
-            // 2. DIMENSÃO: CUIDAR (Rosa) - JÁ SALVO
-            // =========================================================================
+            // CUIDAR
             { id: '2', type: 'dimension', label: 'CUIDAR', x: 0, y: 1400, color: 'pink' },
             { id: '2-1', type: 'attribute', label: 'Clientes (consumidor patrão)', x: 300, y: 1100, color: 'pink' },
             { id: '2-1-1', type: 'action', label: 'Qualidade dos produtos', description: 'Qualidade de ponta a ponta e fazer certo da primeira vez.\nDiagnóstico de Maturidade da Qualidade.\nFluxo de Revisão de Projetos (VMO).\nProjeto de IA SAC/CRM.\nSEY', x: 600, y: 1000, color: 'pink' },
@@ -126,10 +162,7 @@
             { id: '2-3', type: 'attribute', label: 'Equipamentos', x: 300, y: 2300, color: 'pink' },
             { id: '2-3-1', type: 'action', label: 'TPM', description: 'Programa de Conservação Autônoma TPM', x: 600, y: 2300, color: 'pink' },
 
-
-            // =========================================================================
-            // 3. DIMENSÃO: INOVAR (Roxo) - JÁ SALVO
-            // =========================================================================
+            // INOVAR
             { id: '3', type: 'dimension', label: 'INOVAR', x: 0, y: 2800, color: 'purple' },
             { id: '3-1', type: 'attribute', label: 'Melhoria contínua', x: 300, y: 2700, color: 'purple' },
             { id: '3-1-1', type: 'action', label: 'PDCA (Cultivar)', description: 'Dar ideias de melhoria pelo Projeto Ydealize (parte do projeto Cultivar)', x: 600, y: 2500, color: 'purple' },
@@ -145,178 +178,152 @@
             { id: '3-2-4', type: 'action', label: 'Comitê IA', description: 'Comitê de Inteligência Artificial', x: 600, y: 3390, color: 'purple' },
             { id: '3-2-5', type: 'action', label: 'Yara', description: 'IA da Ypê', x: 600, y: 3470, color: 'purple' },
 
-
-            // =========================================================================
-            // 4. SE MOSTRAR (Amarelo) - DETALHADO (NOVA ESTRUTURA)
-            // =========================================================================
+            // SE MOSTRAR
             { id: '4', type: 'dimension', label: 'SE MOSTRAR', x: 0, y: 3800, color: 'yellow' },
-
-            // --- ATRIBUTO: ÉTICA ---
             { id: '4-1', type: 'attribute', label: 'Ética', x: 300, y: 3750, color: 'yellow' },
-            
-            // Ação: Be Compliance
             { id: '4-1-1', type: 'action', label: 'Be Compliance', description: 'Canal de Ética Ypê.\nComitê de integridade.\nCódigo de Conduta.\nAgentes de Conformidade.', x: 600, y: 3700, color: 'yellow' },
-            
-            // Ação: Compliance e Anti Corrupção
             { id: '4-1-2', type: 'action', label: 'Compliance e Anti Corrupção', description: 'Selo Pró Etica concedido pela CGU.', x: 600, y: 3800, color: 'yellow' },
-
-            // --- ATRIBUTO: REPUTAÇÃO ---
             { id: '4-2', type: 'attribute', label: 'Reputação', x: 300, y: 4000, color: 'yellow' },
-            
-            // Ação: Ser e Parecer
             { id: '4-2-1', type: 'action', label: 'Ser e parecer – equalizar valor', description: 'Garantir percepção alinhada à qualidade.\nEvoluir pricing e posicionamento.\nAtributos e embalagens como alavancas.\nExcelência na qualidade.\nWar game lava roupas.\nProjeto Embaixadores.\nMovimento Transparência 100%.', x: 600, y: 3950, color: 'yellow' },
             { id: '4-2-1-k', type: 'kpi', label: '% MC, % MCC, Sell-Out, Share Volume (LRP, LRL, Amaciantes), Brand Power, ROL', x: 900, y: 3950, color: 'yellow' },
-            
-            // Ação: Nacionalidade
             { id: '4-2-2', type: 'action', label: 'Nacionalidade', description: 'Projeto de posicionamento para Marca Corporativa', x: 600, y: 4100, color: 'yellow' },
-
-            // --- ATRIBUTO: SUSTENTABILIDADE ---
             { id: '4-3', type: 'attribute', label: 'Sustentabilidade', x: 300, y: 4400, color: 'yellow' },
-            
-            // Ação: Apropriar-se de sustentabilidade
             { id: '4-3-1', type: 'action', label: 'Sustentabilidade no centro', description: 'Plano diretor de sustentabilidade', x: 600, y: 4200, color: 'yellow' },
-            
-            // Ação: Relatório
             { id: '4-3-2', type: 'action', label: 'Relatório de Sustentabilidade', description: 'Publicação voluntária', x: 600, y: 4280, color: 'yellow' },
-            
-            // Ação: Pacto Global
             { id: '4-3-3', type: 'action', label: 'UN Pacto global', description: '', x: 600, y: 4360, color: 'yellow' },
-            
-            // Ação: Movimento + água
             { id: '4-3-4', type: 'action', label: 'Movimento + água', description: '(diversas iniciativas)', x: 600, y: 4440, color: 'yellow' },
-            
-            // Ação: Mente em Foco
             { id: '4-3-5', type: 'action', label: 'Movimento Mente em Foco', description: 'Programa Cuidar (Social, Psicólogo, Médico, Financeiro)', x: 600, y: 4520, color: 'yellow' },
-            
-            // Ação: Educa2030
             { id: '4-3-6', type: 'action', label: 'Movimento Educa2030', description: 'Educary, EducaYpê, Unico Skill', x: 600, y: 4600, color: 'yellow' },
-
-            // --- ATRIBUTO: EMPLOYER BRANDING & QUALIDADE ---
             { id: '4-4', type: 'attribute', label: 'Marca Empregadora & Qualidade', x: 300, y: 4800, color: 'yellow' },
             { id: '4-4-1', type: 'action', label: 'Employer branding', description: 'Premiação GPTW', x: 600, y: 4750, color: 'yellow' },
             { id: '4-4-2', type: 'action', label: 'Qualidade', description: 'Nossa melhor propaganda é a qualidade', x: 600, y: 4850, color: 'yellow' },
-
-            // --- ATRIBUTO: INCLUSÃO E DIVERSIDADE ---
             { id: '4-5', type: 'attribute', label: 'Inclusão e Diversidade', x: 300, y: 5100, color: 'yellow' },
             { id: '4-5-1', type: 'action', label: 'Inclusão', description: 'Rede Empresarial de Inclusão Social (REIS) / Pacto pela Inclusão', x: 600, y: 5000, color: 'yellow' },
             { id: '4-5-2', type: 'action', label: 'Mulheres', description: 'Selo Pró-Ética Mulheres / Encontros Mulheres Essenciais / Woman on Board', x: 600, y: 5100, color: 'yellow' },
             { id: '4-5-3', type: 'action', label: 'PCD', description: 'Programa Aprendizes / Projeto Promotor com Deficiência', x: 600, y: 5200, color: 'yellow' },
 
-
-            // =========================================================================
-            // 5. CRESCER (Verde) - (Deslocado)
-            // =========================================================================
+            // CRESCER
             { id: '5', type: 'dimension', label: 'CRESCER', x: 0, y: 5600, color: 'green' },
             { id: '5-1', type: 'attribute', label: 'Expansão', x: 300, y: 5500, color: 'green' },
-            { id: '5-1-a1', type: 'action', label: 'Uma Ypê por Região', x: 600, y: 5500, color: 'green' },
-            { id: '5-2', type: 'attribute', label: 'Consumidor', x: 300, y: 5700, color: 'green' },
-            { id: '5-2-a1', type: 'action', label: 'Omnicanalidade', x: 600, y: 5700, color: 'green' },
+            { id: '5-1-1', type: 'action', label: 'Uma Ypê em cada região', description: 'Atuar regionalmente como unidades de negócio.\nPortfólio e comunicação regionalizados (Claims).\nRevisar malha produtiva e logística.\nPotencializar vendas e merchandising.\nEvoluir atendimento financeiro.\nGerir regional com DRE (ponta a ponta).\nGarantir analytics regionalizado.', x: 600, y: 5350, color: 'green' },
+            { id: '5-1-1-k', type: 'kpi', label: 'Margem de servir, OTIF, Distribuição inovação, Yperexecução, ROL Share regional', x: 900, y: 5350, color: 'green' },
+            { id: '5-1-2', type: 'action', label: 'Reconhecimento Marca', description: 'Única marca limpeza no ranking marcas valiosas Brasil 2025', x: 600, y: 5550, color: 'green' },
+            { id: '5-2', type: 'attribute', label: 'A Ypê está onde o consumidor está', x: 300, y: 5850, color: 'green' },
+            { id: '5-2-1', type: 'action', label: 'Ampliar relevância', description: 'Disponibilidade física (omnicanalidade): novos canais (Food, Lavanderia, Perfumaria, Digitais).\nEcossistema serviços.\nDisponibilidade mental: comunicação e redes sociais.\nDiferencial qualidade e benefício.\nConstruir marcas cuidados pessoais.', x: 600, y: 5750, color: 'green' },
+            { id: '5-2-1-k', type: 'kpi', label: 'Brand Power, % ROL novos canais, ROI mídia', x: 900, y: 5750, color: 'green' },
+            { id: '5-3', type: 'attribute', label: 'Foco no consumidor muda o jogo', x: 300, y: 6150, color: 'green' },
+            { id: '5-3-1', type: 'action', label: 'Metas Share e Portfólio', description: 'Roupas: 15|15|30|30 (% share vol).\nCasa: 3º share vol, 2º share valor, 10% mercado.\nPia: 41% share vol.\nBanho: 2ª marca sabonete, Top 2 banho.\nExecução lançamentos.\nInovação e qualidade (embalagens, claims).', x: 600, y: 6050, color: 'green' },
+            { id: '5-3-1-k', type: 'kpi', label: 'Brand Power, Sell out vol, Share Valor/Vol, % ROL Inovação, Distribuição inovação', x: 900, y: 6050, color: 'green' },
+            { id: '5-4', type: 'attribute', label: 'Gestão, Parcerias & Estratégia', x: 300, y: 6450, color: 'green' },
+            { id: '5-4-1', type: 'action', label: 'Gestão de Crise', description: 'Relacionamento com cliente final e órgãos reguladores em situações de crise', x: 600, y: 6350, color: 'green' },
+            { id: '5-4-2', type: 'action', label: 'Parcerias', description: 'Parcerias com outras marcas (ex: Loccitane). Posicionamento de marca.', x: 600, y: 6450, color: 'green' },
+            { id: '5-4-3', type: 'action', label: 'Cascatear Estratégia', description: 'Informar e engajar.\nConvenção líderes, reuniões cascateamento, trimestral resultados, rituais SEY, comunicação interna, PPR.', x: 600, y: 6550, color: 'green' },
 
-            // =========================================================================
-            // 6. PRODUZIR (Slate) - (Deslocado)
-            // =========================================================================
-            { id: '6', type: 'dimension', label: 'PRODUZIR', x: 0, y: 6200, color: 'slate' },
-            { id: '6-1', type: 'attribute', label: 'Produtividade', x: 300, y: 6150, color: 'slate' },
-            { id: '6-1-a1', type: 'action', label: 'Redução Custos', x: 600, y: 6150, color: 'slate' },
+            // PRODUZIR
+            { id: '6', type: 'dimension', label: 'PRODUZIR', x: 0, y: 6900, color: 'slate' },
+            { id: '6-1', type: 'attribute', label: 'Produtividade', x: 300, y: 6800, color: 'slate' },
+            { id: '6-1-1', type: 'action', label: 'Redução de custos (Comercial)', description: 'Máquina Comercial e de execução.\nEvoluir gestão de vendas, trade e logística.\nRever, simplificar, desburocratizar e automatizar processos.\nAdotar tecnologia como alavanca.\nAvaliar requisitos e ajustes para nova realidade.\nDesenvolver profissional de vendas e merchandising.', x: 600, y: 6700, color: 'slate' },
+            { id: '6-1-1-k', type: 'kpi', label: 'Volume Sell Out, Yperexecução, OTIF, Advantage, Margem de Servir, Produtividade Vendas/Promotores', x: 900, y: 6700, color: 'slate' },
+            { id: '6-1-2', type: 'action', label: 'Aumento de lucratividade (Industrial)', description: 'Produção e logística motor.\nCadeia responsiva e flexível.\nParque industrial/CD flexível e próximo.\nInfra/capacidade alinhadas.\nFlexibilidade (make/borrow/buy).\nIBP eficaz (sincronizar áreas).\nQualidade de ponta a ponta.\nGanhar produtividade.', x: 600, y: 6900, color: 'slate' },
+            { id: '6-1-2-k', type: 'kpi', label: 'Frete (distrib/transf), OTIF, Ruptura, Custo variável/ROL, Custos CDs, Advantage, IBP, OEE, GGF, Acuracidade SKU/CD', x: 900, y: 6900, color: 'slate' },
+            { id: '6-2', type: 'attribute', label: 'Automatização', x: 300, y: 7200, color: 'slate' },
+            { id: '6-2-1', type: 'action', label: 'Automatização de backoffice', description: 'Revisar processos e aplicar tecnologia (produtividade).\nDados como força motriz.\nRever, simplificar, desburocratizar.\nAdotar tecnologia.\nAvaliar requisitos e ajustes para nova realidade.\nReforçar mentalidade total experience.', x: 600, y: 7200, color: 'slate' },
+            { id: '6-2-1-k', type: 'kpi', label: '% R$ Pacote Gente Backoffice/ ROL', x: 900, y: 7200, color: 'slate' },
+            { id: '6-3', type: 'attribute', label: 'Produto (manufatura)', x: 300, y: 7400, color: 'slate' },
             
-            // =========================================================================
-            // 7. APRENDER (Laranja) - (Deslocado)
-            // =========================================================================
-            { id: '7', type: 'dimension', label: 'APRENDER +', x: 0, y: 6600, color: 'orange' },
-            { id: '7-1', type: 'attribute', label: 'Aprender', x: 300, y: 6600, color: 'orange' },
-            { id: '7-1-a1', type: 'action', label: 'UnYpê', x: 600, y: 6600, color: 'orange' },
+            // APRENDER
+            { id: '7', type: 'dimension', label: 'APRENDER', x: 0, y: 7800, color: 'orange' },
+            { id: '7-1', type: 'attribute', label: 'Negócio & Ecossistema', x: 300, y: 7700, color: 'orange' },
+            { id: '7-1-1', type: 'action', label: 'Ecossistema de Aprendizagem', description: 'Hubs (Liderança, Estratégico, Backoffice, Comercial e Operações).\nDia Y.', x: 600, y: 7600, color: 'orange' },
+            { id: '7-1-2', type: 'action', label: 'Academias', description: 'Academia de Key Users.\nAcademia dos líderes.', x: 600, y: 7700, color: 'orange' },
+            { id: '7-1-3', type: 'action', label: 'TPM Educacional', description: 'Simulador de aprendizagem.\nDesenho LUP.\nMatriz de Habilidade.', x: 600, y: 7800, color: 'orange' },
+            { id: '7-1-4', type: 'action', label: 'Programas Específicos', description: 'Único Skill.\nImersão em Vendas.', x: 600, y: 7900, color: 'orange' },
+            { id: '7-2', type: 'attribute', label: 'Técnica & Futuro', x: 300, y: 8100, color: 'orange' },
+            { id: '7-2-1', type: 'action', label: 'Aprendizagem Técnica', description: 'CID - Política, procedimentos (IOP)', x: 600, y: 8050, color: 'orange' },
+            { id: '7-2-2', type: 'action', label: 'Upskilling e Reskilling', description: 'Ypê Talks', x: 600, y: 8150, color: 'orange' },
+            { id: '7-3', type: 'attribute', label: 'Experiência do Colaborador', x: 300, y: 8300, color: 'orange' },
+            { id: '7-3-1', type: 'action', label: 'Jornada & Talentos', description: 'Onboarding.\nTalentos (Coordenadores).', x: 600, y: 8300, color: 'orange' },
+
+            // COMUNICAR
+            { id: '8', type: 'dimension', label: 'COMUNICAR', x: 0, y: 8600, color: 'teal' },
+            { id: '8-1', type: 'attribute', label: 'Colaboradores', x: 300, y: 8550, color: 'teal' },
+            { id: '8-1-1', type: 'action', label: 'Canais Internos & Liderança', description: 'Canais, tom de voz, narrativa, deck de mensagens, preparação da liderança', x: 600, y: 8550, color: 'teal' },
+            { id: '8-2', type: 'attribute', label: 'Mercado', x: 300, y: 8750, color: 'teal' },
+            { id: '8-2-1', type: 'action', label: 'Programa de Embaixadores', description: 'Embaixadores da marca', x: 600, y: 8700, color: 'teal' },
+            { id: '8-2-2', type: 'action', label: 'Marca Empregadora', description: 'Programa de Marca Empregadora', x: 600, y: 8800, color: 'teal' },
+            { id: '8-2-2-k', type: 'kpi', label: '% Retenção talentos', x: 900, y: 8800, color: 'teal' },
+
+            // DESENVOLVER
+            { id: '9', type: 'dimension', label: 'DESENVOLVER', x: 0, y: 9200, color: 'indigo' },
+            { id: '9-1', type: 'attribute', label: 'UnYpê & Educação', x: 300, y: 9100, color: 'indigo' },
+            { id: '9-1-1', type: 'action', label: 'Plataforma Única', description: 'Programa Plataforma único', x: 600, y: 9050, color: 'indigo' },
+            { id: '9-1-2', type: 'action', label: 'Educar Y', description: 'Educar Y', x: 600, y: 9150, color: 'indigo' },
+            { id: '9-2', type: 'attribute', label: 'Ciclo de Gente', x: 300, y: 9300, color: 'indigo' },
+            { id: '9-2-1', type: 'action', label: 'Performance & Metas', description: 'Performance, feedback, metas individuais', x: 600, y: 9300, color: 'indigo' },
+            { id: '9-3', type: 'attribute', label: 'Técnico', x: 300, y: 9450, color: 'indigo' },
+            { id: '9-3-1', type: 'action', label: 'PROTEC', description: 'Programa de Desenvolvimento Técnico e Certificação Ypê', x: 600, y: 9450, color: 'indigo' },
+            { id: '9-4', type: 'attribute', label: 'Reconhecimento', x: 300, y: 9650, color: 'indigo' },
+            { id: '9-4-1', type: 'action', label: 'Programa Cultivar', description: 'Atitude, Gratidão, Projetos Destaque e Ydealize', x: 600, y: 9600, color: 'indigo' },
+            { id: '9-4-2', type: 'action', label: 'Mérito', description: 'Mérito de acordo com avaliação de performance', x: 600, y: 9700, color: 'indigo' },
+
+            // DIGITALIZAR
+            { id: '10', type: 'dimension', label: 'DIGITALIZAR', x: 0, y: 9900, color: 'rose' },
+            { id: '10-1', type: 'attribute', label: 'Inovação & Dados', x: 300, y: 9850, color: 'rose' },
+            { id: '10-1-1', type: 'action', label: 'Hackathon', description: 'Dia Y - Hackathon', x: 600, y: 9800, color: 'rose' },
+            { id: '10-1-2', type: 'action', label: 'Capacitação de Dados', description: 'Capacitação em Dados', x: 600, y: 9900, color: 'rose' },
+            { id: '10-1-3', type: 'action', label: 'Ypê Talks', description: 'Ypê Talks', x: 600, y: 10000, color: 'rose' },
+
+            // RECONHECER
+            { id: '11', type: 'dimension', label: 'RECONHECER', x: 0, y: 10300, color: 'cyan' },
+            { id: '11-1', type: 'attribute', label: 'Programas Internos', x: 300, y: 10300, color: 'cyan' },
+            { id: '11-1-1', type: 'action', label: 'Programa Cultivar', description: 'Reconhecimento', x: 600, y: 10250, color: 'cyan' },
+            { id: '11-1-2', type: 'action', label: 'The Voice Ypê', description: 'Talentos internos', x: 600, y: 10350, color: 'cyan' },
+            
+            // IMPLEMENTAR
+            { id: '12', type: 'dimension', label: 'IMPLEMENTAR', x: 0, y: 10800, color: 'stone' },
+            { id: '12-1', type: 'attribute', label: 'Governança', x: 300, y: 10800, color: 'stone' },
+            { id: '12-1-1', type: 'action', label: 'Padrão', description: 'Não há padrão ou governança', x: 600, y: 10800, color: 'stone' },
+
+            // COMPARTILHAR
+            { id: '13', type: 'dimension', label: 'COMPARTILHAR', x: 0, y: 11400, color: 'lime' },
+            { id: '13-1', type: 'attribute', label: 'Estratégia', x: 300, y: 11200, color: 'lime' },
+            { id: '13-1-1', type: 'action', label: 'Informar e engajar', description: 'Convenção líderes\nReuniões de cascateamento\nReunião trimestral\nRituais de SEY\nComunicação interna\nPPR', x: 600, y: 11200, color: 'lime' },
+            { id: '13-2', type: 'attribute', label: 'Comunicação', x: 300, y: 11500, color: 'lime' },
+            { id: '13-2-1', type: 'action', label: 'Interna', description: 'Canais', x: 600, y: 11450, color: 'lime' },
+            { id: '13-2-2', type: 'action', label: 'Entre times', description: '?', x: 600, y: 11550, color: 'lime' },
+            { id: '13-3', type: 'attribute', label: 'Gestão Conhecimento', x: 300, y: 11700, color: 'lime' },
+            { id: '13-3-1', type: 'action', label: 'Gestão', description: '?', x: 600, y: 11700, color: 'lime' },
+
+            // ATRAIR
+            { id: '14', type: 'dimension', label: 'ATRAIR', x: 0, y: 12000, color: 'fuchsia' },
+            { id: '14-1', type: 'attribute', label: 'Atração', x: 300, y: 12000, color: 'fuchsia' },
+            { id: '14-1-1', type: 'action', label: 'Estágio', description: 'Programa de Estágio', x: 600, y: 12000, color: 'fuchsia' },
         ];
 
         const INITIAL_EDGES_DATA = [
-            // LIDERAR - MANTIDO
-            { id: 'e1-11', source: '1', target: '1-1' },
-            { id: 'e11-1', source: '1-1', target: '1-1-1' }, { id: 'e111-k', source: '1-1-1', target: '1-1-1-k' },
-            { id: 'e11-2', source: '1-1', target: '1-1-2' }, { id: 'e112-k', source: '1-1-2', target: '1-1-2-k' },
-            { id: 'e11-3', source: '1-1', target: '1-1-3' },
-            { id: 'e11-4', source: '1-1', target: '1-1-4' },
-            { id: 'e1-12', source: '1', target: '1-2' },
-            { id: 'e12-1', source: '1-2', target: '1-2-1' }, { id: 'e121-k', source: '1-2-1', target: '1-2-1-k' },
-            { id: 'e12-2', source: '1-2', target: '1-2-2' }, { id: 'e122-k', source: '1-2-2', target: '1-2-2-k' },
-            { id: 'e12-3', source: '1-2', target: '1-2-3' },
-            { id: 'e12-4', source: '1-2', target: '1-2-4' },
-            { id: 'e12-5', source: '1-2', target: '1-2-5' }, { id: 'e125-k', source: '1-2-5', target: '1-2-5-k' },
-            { id: 'e12-6', source: '1-2', target: '1-2-6' },
-
-            // CUIDAR - MANTIDO
-            { id: 'e2-21', source: '2', target: '2-1' },
-            { id: 'e21-1', source: '2-1', target: '2-1-1' }, { id: 'e211-k', source: '2-1-1', target: '2-1-1-k' },
-            { id: 'e21-2', source: '2-1', target: '2-1-2' },
-            { id: 'e21-3', source: '2-1', target: '2-1-3' },
-            { id: 'e2-22', source: '2', target: '2-2' },
-            { id: 'e22-1', source: '2-2', target: '2-2-1' },
-            { id: 'e22-2', source: '2-2', target: '2-2-2' },
-            { id: 'e22-3', source: '2-2', target: '2-2-3' },
-            { id: 'e22-4', source: '2-2', target: '2-2-4' },
-            { id: 'e22-5', source: '2-2', target: '2-2-5' },
-            { id: 'e2-23', source: '2', target: '2-3' },
-            { id: 'e23-1', source: '2-3', target: '2-3-1' },
-
-            // INOVAR - MANTIDO
-            { id: 'e3-31', source: '3', target: '3-1' },
-            { id: 'e31-1', source: '3-1', target: '3-1-1' },
-            { id: 'e31-2', source: '3-1', target: '3-1-2' },
-            { id: 'e31-3', source: '3-1', target: '3-1-3' },
-            { id: 'e31-4', source: '3-1', target: '3-1-4' },
-            { id: 'e31-5', source: '3-1', target: '3-1-5' },
-            { id: 'e31-6', source: '3-1', target: '3-1-6' },
-            { id: 'e3-32', source: '3', target: '3-2' },
-            { id: 'e32-1', source: '3-2', target: '3-2-1' },
-            { id: 'e32-2', source: '3-2', target: '3-2-2' },
-            { id: 'e32-3', source: '3-2', target: '3-2-3' },
-            { id: 'e32-4', source: '3-2', target: '3-2-4' },
-            { id: 'e32-5', source: '3-2', target: '3-2-5' },
-
-            // SE MOSTRAR - NOVO
-            { id: 'e4-41', source: '4', target: '4-1' },
-            { id: 'e41-1', source: '4-1', target: '4-1-1' },
-            { id: 'e41-2', source: '4-1', target: '4-1-2' },
-
-            { id: 'e4-42', source: '4', target: '4-2' },
-            { id: 'e42-1', source: '4-2', target: '4-2-1' }, { id: 'e421-k', source: '4-2-1', target: '4-2-1-k' },
-            { id: 'e42-2', source: '4-2', target: '4-2-2' },
-
-            { id: 'e4-43', source: '4', target: '4-3' },
-            { id: 'e43-1', source: '4-3', target: '4-3-1' },
-            { id: 'e43-2', source: '4-3', target: '4-3-2' },
-            { id: 'e43-3', source: '4-3', target: '4-3-3' },
-            { id: 'e43-4', source: '4-3', target: '4-3-4' },
-            { id: 'e43-5', source: '4-3', target: '4-3-5' },
-            { id: 'e43-6', source: '4-3', target: '4-3-6' },
-
-            { id: 'e4-44', source: '4', target: '4-4' },
-            { id: 'e44-1', source: '4-4', target: '4-4-1' },
-            { id: 'e44-2', source: '4-4', target: '4-4-2' },
-
-            { id: 'e4-45', source: '4', target: '4-5' },
-            { id: 'e45-1', source: '4-5', target: '4-5-1' },
-            { id: 'e45-2', source: '4-5', target: '4-5-2' },
-            { id: 'e45-3', source: '4-5', target: '4-5-3' },
-
-            // OUTROS (Deslocados)
-            { id: 'e5-51', source: '5', target: '5-1' }, { id: 'e51-1', source: '5-1', target: '5-1-a1' },
-            { id: 'e5-52', source: '5', target: '5-2' }, { id: 'e52-1', source: '5-2', target: '5-2-a1' },
-            { id: 'e6-61', source: '6', target: '6-1' }, { id: 'e61-1', source: '6-1', target: '6-1-a1' },
-            { id: 'e7-71', source: '7', target: '7-1' }, { id: 'e71-1', source: '7-1', target: '7-1-a1' },
+            // (Conexões das outras dimensões mantidas...)
+            { id: 'e1-11', source: '1', target: '1-1' }, { id: 'e11-1', source: '1-1', target: '1-1-1' }, { id: 'e111-k', source: '1-1-1', target: '1-1-1-k' }, { id: 'e11-2', source: '1-1', target: '1-1-2' }, { id: 'e112-k', source: '1-1-2', target: '1-1-2-k' }, { id: 'e11-3', source: '1-1', target: '1-1-3' }, { id: 'e11-4', source: '1-1', target: '1-1-4' }, { id: 'e1-12', source: '1', target: '1-2' }, { id: 'e12-1', source: '1-2', target: '1-2-1' }, { id: 'e121-k', source: '1-2-1', target: '1-2-1-k' }, { id: 'e12-2', source: '1-2', target: '1-2-2' }, { id: 'e122-k', source: '1-2-2', target: '1-2-2-k' }, { id: 'e12-3', source: '1-2', target: '1-2-3' }, { id: 'e12-4', source: '1-2', target: '1-2-4' }, { id: 'e12-5', source: '1-2', target: '1-2-5' }, { id: 'e125-k', source: '1-2-5', target: '1-2-5-k' }, { id: 'e12-6', source: '1-2', target: '1-2-6' },
+            { id: 'e2-21', source: '2', target: '2-1' }, { id: 'e21-1', source: '2-1', target: '2-1-1' }, { id: 'e211-k', source: '2-1-1', target: '2-1-1-k' }, { id: 'e21-2', source: '2-1', target: '2-1-2' }, { id: 'e21-3', source: '2-1', target: '2-1-3' }, { id: 'e2-22', source: '2', target: '2-2' }, { id: 'e22-1', source: '2-2', target: '2-2-1' }, { id: 'e22-2', source: '2-2', target: '2-2-2' }, { id: 'e22-3', source: '2-2', target: '2-2-3' }, { id: 'e22-4', source: '2-2', target: '2-2-4' }, { id: 'e22-5', source: '2-2', target: '2-2-5' }, { id: 'e2-23', source: '2', target: '2-3' }, { id: 'e23-1', source: '2-3', target: '2-3-1' },
+            { id: 'e3-31', source: '3', target: '3-1' }, { id: 'e31-1', source: '3-1', target: '3-1-1' }, { id: 'e31-2', source: '3-1', target: '3-1-2' }, { id: 'e31-3', source: '3-1', target: '3-1-3' }, { id: 'e31-4', source: '3-1', target: '3-1-4' }, { id: 'e31-5', source: '3-1', target: '3-1-5' }, { id: 'e31-6', source: '3-1', target: '3-1-6' }, { id: 'e3-32', source: '3', target: '3-2' }, { id: 'e32-1', source: '3-2', target: '3-2-1' }, { id: 'e32-2', source: '3-2', target: '3-2-2' }, { id: 'e32-3', source: '3-2', target: '3-2-3' }, { id: 'e32-4', source: '3-2', target: '3-2-4' }, { id: 'e32-5', source: '3-2', target: '3-2-5' },
+            { id: 'e4-41', source: '4', target: '4-1' }, { id: 'e41-1', source: '4-1', target: '4-1-1' }, { id: 'e41-2', source: '4-1', target: '4-1-2' }, { id: 'e4-42', source: '4', target: '4-2' }, { id: 'e42-1', source: '4-2', target: '4-2-1' }, { id: 'e421-k', source: '4-2-1', target: '4-2-1-k' }, { id: 'e42-2', source: '4-2', target: '4-2-2' }, { id: 'e4-43', source: '4', target: '4-3' }, { id: 'e43-1', source: '4-3', target: '4-3-1' }, { id: 'e43-2', source: '4-3', target: '4-3-2' }, { id: 'e43-3', source: '4-3', target: '4-3-3' }, { id: 'e43-4', source: '4-3', target: '4-3-4' }, { id: 'e43-5', source: '4-3', target: '4-3-5' }, { id: 'e43-6', source: '4-3', target: '4-3-6' }, { id: 'e4-44', source: '4', target: '4-4' }, { id: 'e44-1', source: '4-4', target: '4-4-1' }, { id: 'e44-2', source: '4-4', target: '4-4-2' }, { id: 'e4-45', source: '4', target: '4-5' }, { id: 'e45-1', source: '4-5', target: '4-5-1' }, { id: 'e45-2', source: '4-5', target: '4-5-2' }, { id: 'e45-3', source: '4-5', target: '4-5-3' },
+            { id: 'e5-51', source: '5', target: '5-1' }, { id: 'e51-1', source: '5-1', target: '5-1-1' }, { id: 'e511-k', source: '5-1-1', target: '5-1-1-k' }, { id: 'e51-2', source: '5-1', target: '5-1-2' }, { id: 'e5-52', source: '5', target: '5-2' }, { id: 'e52-1', source: '5-2', target: '5-2-1' }, { id: 'e521-k', source: '5-2-1', target: '5-2-1-k' }, { id: 'e5-53', source: '5', target: '5-3' }, { id: 'e53-1', source: '5-3', target: '5-3-1' }, { id: 'e531-k', source: '5-3-1', target: '5-3-1-k' }, { id: 'e5-54', source: '5', target: '5-4' }, { id: 'e54-1', source: '5-4', target: '5-4-1' }, { id: 'e54-2', source: '5-4', target: '5-4-2' }, { id: 'e54-3', source: '5-4', target: '5-4-3' },
+            { id: 'e6-61', source: '6', target: '6-1' }, { id: 'e61-1', source: '6-1', target: '6-1-1' }, { id: 'e611-k', source: '6-1-1', target: '6-1-1-k' }, { id: 'e61-2', source: '6-1', target: '6-1-2' }, { id: 'e612-k', source: '6-1-2', target: '6-1-2-k' }, { id: 'e6-62', source: '6', target: '6-2' }, { id: 'e62-1', source: '6-2', target: '6-2-1' }, { id: 'e621-k', source: '6-2-1', target: '6-2-1-k' }, { id: 'e6-63', source: '6', target: '6-3' },
+            { id: 'e7-71', source: '7', target: '7-1' }, { id: 'e71-1', source: '7-1', target: '7-1-1' }, { id: 'e71-2', source: '7-1', target: '7-1-2' }, { id: 'e71-3', source: '7-1', target: '7-1-3' }, { id: 'e71-4', source: '7-1', target: '7-1-4' }, { id: 'e7-72', source: '7', target: '7-2' }, { id: 'e72-1', source: '7-2', target: '7-2-1' }, { id: 'e72-2', source: '7-2', target: '7-2-2' }, { id: 'e7-73', source: '7', target: '7-3' }, { id: 'e73-1', source: '7-3', target: '7-3-1' },
+            { id: 'e8-81', source: '8', target: '8-1' }, { id: 'e81-1', source: '8-1', target: '8-1-1' }, { id: 'e8-82', source: '8', target: '8-2' }, { id: 'e82-1', source: '8-2', target: '8-2-1' }, { id: 'e82-2', source: '8-2', target: '8-2-2' }, { id: 'e822-k', source: '8-2-2', target: '8-2-2-k' },
+            { id: 'e9-91', source: '9', target: '9-1' }, { id: 'e91-1', source: '9-1', target: '9-1-1' }, { id: 'e91-2', source: '9-1', target: '9-1-2' }, { id: 'e9-92', source: '9', target: '9-2' }, { id: 'e92-1', source: '9-2', target: '9-2-1' }, { id: 'e9-93', source: '9', target: '9-3' }, { id: 'e93-1', source: '9-3', target: '9-3-1' }, { id: 'e9-94', source: '9', target: '9-4' }, { id: 'e94-1', source: '9-4', target: '9-4-1' }, { id: 'e94-2', source: '9-4', target: '9-4-2' },
+            { id: 'e10-101', source: '10', target: '10-1' }, { id: 'e101-1', source: '10-1', target: '10-1-1' }, { id: 'e101-2', source: '10-1', target: '10-1-2' }, { id: 'e101-3', source: '10-1', target: '10-1-3' },
+            { id: 'e11-111', source: '11', target: '11-1' }, { id: 'e111-1', source: '11-1', target: '11-1-1' }, { id: 'e111-2', source: '11-1', target: '11-1-2' },
+            { id: 'e12-121', source: '12', target: '12-1' }, { id: 'e121-1', source: '12-1', target: '12-1-1' },
+            { id: 'e13-131', source: '13', target: '13-1' }, { id: 'e131-1', source: '13-1', target: '13-1-1' }, { id: 'e13-132', source: '13', target: '13-2' }, { id: 'e132-1', source: '13-2', target: '13-2-1' }, { id: 'e132-2', source: '13-2', target: '13-2-2' }, { id: 'e13-133', source: '13', target: '13-3' }, { id: 'e133-1', source: '13-3', target: '13-3-1' },
+            { id: 'e14-141', source: '14', target: '14-1' }, { id: 'e141-1', source: '14-1', target: '14-1-1' },
         ];
 
         function App() {
-            // Inicialização do Estado com LocalStorage
-            const [nodes, setNodes] = useState(() => {
-                const saved = localStorage.getItem('ypeNodes');
-                return saved ? JSON.parse(saved) : INITIAL_NODES_DATA;
-            });
-
-            const [edges, setEdges] = useState(() => {
-                const saved = localStorage.getItem('ypeEdges');
-                return saved ? JSON.parse(saved) : INITIAL_EDGES_DATA;
-            });
-
+            // Estado local inicializado com dados vazios para evitar erro antes do sync
+            const [nodes, setNodes] = useState([]);
+            const [edges, setEdges] = useState([]);
             const [selectedNodeId, setSelectedNodeId] = useState(null);
+            const [isSyncing, setIsSyncing] = useState(true);
             
             // Viewport
             const [scale, setScale] = useState(0.5); 
@@ -329,24 +336,59 @@
 
             const containerRef = useRef(null);
 
-            // --- PERSISTÊNCIA AUTOMÁTICA ---
+            // --- FIREBASE SYNC ---
             useEffect(() => {
-                localStorage.setItem('ypeNodes', JSON.stringify(nodes));
-            }, [nodes]);
+                const initSync = async () => {
+                    if (!window.firebaseDB) {
+                        // Aguarda evento de carregamento se o script ainda não rodou
+                        window.addEventListener('firebase-ready', initSync);
+                        return;
+                    }
 
-            useEffect(() => {
-                localStorage.setItem('ypeEdges', JSON.stringify(edges));
-            }, [edges]);
+                    const db = window.firebaseDB;
+                    const docRef = window.firebaseDoc(db, "maps", "ype_v1");
 
-            // Função para Resetar Dados
-            const handleResetData = () => {
-                if (confirm('Tem certeza? Isso apagará todas as suas edições e restaurará o mapa original da Ypê.')) {
-                    setNodes(INITIAL_NODES_DATA);
-                    setEdges(INITIAL_EDGES_DATA);
-                    localStorage.removeItem('ypeNodes');
-                    localStorage.removeItem('ypeEdges');
+                    // Listener em tempo real
+                    const unsubscribe = window.firebaseOnSnapshot(docRef, async (docSnap) => {
+                        if (docSnap.exists()) {
+                            const data = docSnap.data();
+                            // Se não estamos arrastando (para evitar conflito de UI), atualiza
+                            if (!isDraggingNode) {
+                                setNodes(data.nodes || []);
+                                setEdges(data.edges || []);
+                            }
+                        } else {
+                            // Se documento não existe, cria com o SEED
+                            await window.firebaseSetDoc(docRef, {
+                                nodes: INITIAL_NODES_DATA,
+                                edges: INITIAL_EDGES_DATA
+                            });
+                        }
+                        setIsSyncing(false);
+                    });
+
+                    return unsubscribe;
+                };
+
+                initSync();
+            }, []);
+
+            // Função para salvar no Firebase
+            const saveToCloud = useCallback(async (newNodes, newEdges) => {
+                if (!window.firebaseDB) return;
+                const db = window.firebaseDB;
+                const docRef = window.firebaseDoc(db, "maps", "ype_v1");
+                
+                try {
+                    await window.firebaseSetDoc(docRef, {
+                        nodes: newNodes,
+                        edges: newEdges
+                    }, { merge: true });
+                } catch (e) {
+                    console.error("Erro ao salvar:", e);
                 }
-            };
+            }, []);
+
 
             // --- Handlers de Mouse ---
             const handleMouseDown = (e) => {
@@ -372,7 +414,7 @@
                 const deltaY = e.clientY - lastMousePos.y;
 
                 if (isDraggingNode) {
-                    setNodes((prev) => prev.map(node => {
+                    const newNodes = nodes.map(node => {
                         if (node.id === isDraggingNode) {
                             return {
                                 ...node,
@@ -381,7 +423,8 @@
                             };
                         }
                         return node;
-                    }));
+                    });
+                    setNodes(newNodes);
                     setLastMousePos({ x: e.clientX, y: e.clientY });
                 } else if (isPanning) {
                     setPan((prev) => ({
@@ -390,17 +433,22 @@
                     }));
                     setLastMousePos({ x: e.clientX, y: e.clientY });
                 }
-            }, [isDraggingNode, isPanning, lastMousePos, scale]);
+            }, [isDraggingNode, isPanning, lastMousePos, scale, nodes]);
 
             const handleMouseUp = () => {
+                if (isDraggingNode) {
+                    saveToCloud(nodes, edges); // Salva ao soltar
+                }
                 setIsDraggingNode(null);
                 setIsPanning(false);
             };
 
-            // --- CRUD e LÓGICA DE VÍNCULOS ---
+            // --- CRUD ---
             
             const handleUpdateNode = (id, field, value) => {
-                setNodes(nodes.map(n => n.id === id ? { ...n, [field]: value } : n));
+                const newNodes = nodes.map(n => n.id === id ? { ...n, [field]: value } : n);
+                setNodes(newNodes);
+                saveToCloud(newNodes, edges);
             };
 
             const getParentId = (childId) => {
@@ -416,16 +464,20 @@
 
                 const newEdges = edges.filter(e => e.target !== childId);
                 newEdges.push({ id: `e${newParentId}-${childId}-${Date.now()}`, source: newParentId, target: childId });
-                setEdges(newEdges);
-
+                
+                let newNodes = nodes;
                 if (newParentNode && childNode) {
-                    setNodes(nodes.map(n => n.id === childId ? {
+                    newNodes = nodes.map(n => n.id === childId ? {
                         ...n,
                         x: newParentNode.x + 250,
                         y: newParentNode.y + 20,
                         color: newParentNode.color
-                    } : n));
+                    } : n);
                 }
+                
+                setNodes(newNodes);
+                setEdges(newEdges);
+                saveToCloud(newNodes, newEdges);
             };
 
             const handleAddNode = (type) => {
@@ -453,18 +505,27 @@
                     color: parentNode ? parentNode.color : 'blue'
                 };
 
-                setNodes([...nodes, newNode]);
+                const newNodes = [...nodes, newNode];
+                let newEdges = edges;
 
                 if (parentId) {
-                    setEdges([...edges, { id: `e${parentId}-${newNodeId}`, source: parentId, target: newNodeId }]);
+                    newEdges = [...edges, { id: `e${parentId}-${newNodeId}`, source: parentId, target: newNodeId }];
                 }
+                
+                setNodes(newNodes);
+                setEdges(newEdges);
+                saveToCloud(newNodes, newEdges);
                 setSelectedNodeId(newNodeId);
             };
 
             const handleDeleteNode = () => {
                 if (!selectedNodeId) return;
-                setNodes(nodes.filter(n => n.id !== selectedNodeId));
-                setEdges(edges.filter(e => e.source !== selectedNodeId && e.target !== selectedNodeId));
+                const newNodes = nodes.filter(n => n.id !== selectedNodeId);
+                const newEdges = edges.filter(e => e.source !== selectedNodeId && e.target !== selectedNodeId);
+                
+                setNodes(newNodes);
+                setEdges(newEdges);
+                saveToCloud(newNodes, newEdges);
                 setSelectedNodeId(null);
             };
 
@@ -566,6 +627,15 @@
                 }
             };
 
+            if (isSyncing && nodes.length === 0) {
+                return (
+                    <div className="flex h-screen w-full items-center justify-center bg-slate-50 flex-col gap-4">
+                        <div className="loader"></div>
+                        <p className="text-slate-500 text-sm font-medium">Sincronizando com a Nuvem...</p>
+                    </div>
+                );
+            }
+
             return (
                 <div className="flex h-screen w-full bg-slate-50 overflow-hidden text-slate-800 font-sans">
                     
@@ -578,12 +648,9 @@
                                     Estratégia Ypê
                                 </h1>
                                 <p className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1 mt-1">
-                                    <Icons.Save className="w-3 h-3" /> Salvo Automaticamente
+                                    <Icons.CloudCheck className="w-3 h-3" /> Online & Sincronizado
                                 </p>
                             </div>
-                            <button onClick={handleResetData} title="Restaurar Padrão" className="p-2 hover:bg-slate-100 rounded text-slate-400 hover:text-red-500 transition-colors">
-                                <Icons.RotateCcw className="w-4 h-4" />
-                            </button>
                         </div>
 
                         <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-slate-50/50">
@@ -767,3 +834,4 @@
     </style>
 </body>
 </html>
+
